@@ -1,30 +1,29 @@
-const { AceBase, ID } = require('../src/index');
+const {AceBase} = require('../dist/cjs');
+const path = require('path');
+const fs = require('fs');
 
-// TODO: finish this test, move to /src/test
+// remove previous test db
+fs.rmSync(path.join(__dirname, '../custom-test.acebase'), {recursive: true, force: true});
+
 const db = new AceBase('custom-test');
 db.ready(async () => {
 
-    // Temp custom test for #112, using non-random data for easier (reproducible) debugging
+    let ref = db.ref('table');
 
-    const exists = await db.ref('collection').exists();
-    let updates = {};
-    if (!exists) {
-        for (let i = 0; i < 2000; i++) {
-            updates[ID.generate()] = { letter: String.fromCharCode(97 + Math.floor(Math.random() * 26)) };
-        }
+    // add "large" dataset to the database
+    let songIds1 = Array(110).fill(0).map((_value, index) => `id-${index}`);
+    await ref.update(songIds1.reduce((obj, songId) => {
+        obj[songId] = {playlistId: 'playlist1'};
+        return obj;
+    }, {}));
 
-        // create non-indexed collection
-        await db.ref('collection').update(updates);
-    }
-    else {
-        const snap = await db.ref('collection').get();
-        updates = snap.val();
-    }
+    // remove all the added records with the query 
+    await ref.query().filter('playlistId', '==', 'playlist1').remove();
 
-    // create indexed collection
-    const indexes = await db.indexes.get();
-    await Promise.all(indexes.map(index => db.indexes.delete(index.fileName)));
-    await db.ref('sort_indexed').remove();
-    await db.indexes.create('sort_indexed', 'letter');
-    await db.ref('sort_indexed').update(updates);
+    // add same "large" dataset to the database again -> error
+    let songIds2 = Array(110).fill(0).map((_value, index) => `id-${index}`);
+    await ref.update(songIds2.reduce((obj, songId) => {
+        obj[songId] = {playlistId: 'playlist1'};
+        return obj;
+    }, {}));
 });
